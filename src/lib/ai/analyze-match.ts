@@ -33,6 +33,7 @@ export async function analyzeMatch(input: AnalyzeRequest): Promise<MatchAnalysis
     system: SYSTEM_PROMPT,
     prompt: `<resume>\n${input.resumeText}\n</resume>\n<job_description>\n${input.jobDescription}\n</job_description>`,
     maxOutputTokens: MAX_OUTPUT_TOKENS,
+    maxRetries: 1,
     abortSignal: AbortSignal.timeout(ANALYSIS_TIMEOUT_MS),
   });
 

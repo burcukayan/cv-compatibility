@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { z } from "zod";
 
+import { CoverLetter } from "@/components/cover-letter";
 import { MatchResults } from "@/components/match-results";
 import {
   TEXT_MAX_LENGTH,
@@ -10,11 +11,61 @@ import {
   analyzeRequestSchema,
   extractedPdfSchema,
   matchAnalysisSchema,
+  type AnalyzeRequest,
   type MatchAnalysis,
 } from "@/lib/schemas";
 
 const GENERIC_ERROR = "Something went wrong.";
 const MAX_ERROR_LENGTH = 500;
+const RETRY_FALLBACK_SECONDS = 60;
+
+function retryAfterSeconds(response: Response): number {
+  const header = response.headers.get("Retry-After");
+
+  if (header === null) {
+    return RETRY_FALLBACK_SECONDS;
+  }
+
+  const parsed = Number(header);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return RETRY_FALLBACK_SECONDS;
+  }
+
+  return Math.ceil(parsed);
+}
+
+function useRetryCooldown() {
+  const [until, setUntil] = useState<number | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+
+  useEffect(() => {
+    if (until === null) {
+      return;
+    }
+
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+      setSecondsLeft(left);
+
+      if (left === 0) {
+        setUntil(null);
+      }
+    };
+
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [until]);
+
+  const start = useCallback((seconds: number) => {
+    const safeSeconds = Math.max(1, Math.ceil(seconds));
+    setSecondsLeft(safeSeconds);
+    setUntil(Date.now() + safeSeconds * 1000);
+  }, []);
+
+  return { secondsLeft, start };
+}
 
 function isCountOutOfRange(length: number): boolean {
   return length < TEXT_MIN_LENGTH || length > TEXT_MAX_LENGTH;
@@ -67,8 +118,14 @@ export function Analyzer() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
+  const [analyzedInput, setAnalyzedInput] = useState<AnalyzeRequest | null>(null);
+  const [coverSession, setCoverSession] = useState(0);
   const extractInFlight = useRef(false);
   const analyzeInFlight = useRef(false);
+  const { secondsLeft: retrySeconds, start: startRetryCooldown } = useRetryCooldown();
+  const onRateLimited = useCallback(() => {
+    startRetryCooldown(RETRY_FALLBACK_SECONDS);
+  }, [startRetryCooldown]);
 
   const canAnalyze =
     analyzeRequestSchema.safeParse({ resumeText, jobDescription }).success &&
@@ -124,7 +181,7 @@ export function Analyzer() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (analyzeInFlight.current || extractInFlight.current) {
+    if (analyzeInFlight.current || extractInFlight.current || retrySeconds > 0) {
       return;
     }
 
@@ -146,6 +203,10 @@ export function Analyzer() {
       });
 
       if (!response.ok) {
+        if (response.status === 429) {
+          startRetryCooldown(retryAfterSeconds(response));
+        }
+
         setError(await readApiError(response));
         return;
       }
@@ -158,6 +219,17 @@ export function Analyzer() {
         return;
       }
 
+      const nextInput = parsed.data;
+      const inputChanged =
+        analyzedInput === null ||
+        analyzedInput.resumeText !== nextInput.resumeText ||
+        analyzedInput.jobDescription !== nextInput.jobDescription;
+
+      if (inputChanged) {
+        setCoverSession((session) => session + 1);
+      }
+
+      setAnalyzedInput(nextInput);
       setAnalysis(result.data.data);
     } catch {
       setError(GENERIC_ERROR);
@@ -168,6 +240,11 @@ export function Analyzer() {
   }
 
   const uploadDisabled = isExtracting || isAnalyzing;
+  const resultsInSync =
+    analysis !== null &&
+    analyzedInput !== null &&
+    resumeText.trim() === analyzedInput.resumeText &&
+    jobDescription.trim() === analyzedInput.jobDescription;
 
   return (
     <div>
@@ -230,11 +307,15 @@ export function Analyzer() {
 
         <button
           type="submit"
-          disabled={!canAnalyze}
+          disabled={!canAnalyze || retrySeconds > 0}
           aria-busy={isAnalyzing}
           className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-foreground px-5 text-sm font-medium text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
         >
-          {isAnalyzing ? "Analyzing…" : "Analyze match"}
+          {retrySeconds > 0
+            ? `Try again in ${retrySeconds}s`
+            : isAnalyzing
+              ? "Analyzing…"
+              : "Analyze match"}
         </button>
       </form>
 
@@ -254,7 +335,19 @@ export function Analyzer() {
         </div>
       ) : null}
 
-      {analysis ? <MatchResults analysis={analysis} /> : null}
+      {resultsInSync && analysis && analyzedInput ? (
+        <>
+          <MatchResults analysis={analysis} />
+          <CoverLetter
+            key={coverSession}
+            id={String(coverSession)}
+            resumeText={analyzedInput.resumeText}
+            jobDescription={analyzedInput.jobDescription}
+            retrySeconds={retrySeconds}
+            onRateLimited={onRateLimited}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

@@ -62,6 +62,11 @@ export const extractedPdfSchema = z
   })
   .refine((value) => value.charCount === value.text.length);
 
+export const coverLetterRequestSchema = analyzeRequestSchema.extend({
+  tone: z.enum(["professional", "enthusiastic", "concise"]),
+});
+
 export type AnalyzeRequest = z.infer<typeof analyzeRequestSchema>;
+export type CoverLetterRequest = z.infer<typeof coverLetterRequestSchema>;
 export type MatchAnalysis = z.infer<typeof matchAnalysisSchema>;
 export type ExtractedPdf = z.infer<typeof extractedPdfSchema>;
