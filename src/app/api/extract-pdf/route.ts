@@ -1,5 +1,7 @@
 import { requireUser } from "@/lib/auth/require-user";
+import { verifyOrigin } from "@/lib/security/verify-origin";
 import { PdfTooManyPagesError, extractPdfText } from "@/lib/pdf/extract-text";
+import { checkRateLimit, rateLimitRemainingHeader } from "@/lib/rate-limit";
 import { extractedPdfSchema } from "@/lib/schemas";
 
 // Cache Components rejects an explicit runtime export. Node.js is already the only runtime.
@@ -45,10 +47,22 @@ function hasPdfMagic(bytes: Uint8Array): boolean {
 }
 
 export async function POST(request: Request) {
+  const originResponse = verifyOrigin(request);
+
+  if (originResponse) {
+    return originResponse;
+  }
+
   const authResult = await requireUser();
 
   if (authResult instanceof Response) {
     return authResult;
+  }
+
+  const userLimit = await checkRateLimit("extractPdf", authResult.sub);
+
+  if (userLimit.response) {
+    return userLimit.response;
   }
 
   let formData: FormData;
@@ -100,7 +114,10 @@ export async function POST(request: Request) {
       return Response.json({ error: "Something went wrong." }, { status: 500 });
     }
 
-    return Response.json(parsed.data, { status: 200 });
+    return Response.json(parsed.data, {
+      status: 200,
+      headers: rateLimitRemainingHeader(userLimit.remaining),
+    });
   } catch (error) {
     console.error(errorName(error));
 

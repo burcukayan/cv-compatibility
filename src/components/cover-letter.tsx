@@ -20,6 +20,7 @@ const TONES: { value: Tone; label: string }[] = [
 const COVER_LETTER_ERROR = "The cover letter could not be generated. Please try again.";
 const COPY_ERROR = "The letter could not be copied. Please try again.";
 const PROMPT = "Write a cover letter.";
+const MAX_ERROR_LENGTH = 500;
 
 const primaryButtonClassName =
   "inline-flex h-9 items-center justify-center rounded-lg bg-foreground px-3 text-sm font-medium text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:cursor-not-allowed disabled:opacity-50";
@@ -35,7 +36,7 @@ type CoverLetterProps = {
   resumeText: string;
   jobDescription: string;
   retrySeconds: number;
-  onRateLimited: () => void;
+  onRateLimited: (seconds?: number) => void;
 };
 
 function parseKnownAiMessage(raw: string): string | null {
@@ -58,9 +59,70 @@ function parseKnownAiMessage(raw: string): string | null {
   return null;
 }
 
+function readBoundedError(raw: string | undefined): string | null {
+  if (raw === undefined) {
+    return null;
+  }
+
+  try {
+    const body: unknown = JSON.parse(raw);
+
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "error" in body &&
+      typeof body.error === "string" &&
+      body.error.length > 0 &&
+      body.error.length <= MAX_ERROR_LENGTH
+    ) {
+      return body.error;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function readRetryAfter(header: string | undefined): number | undefined {
+  if (header === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number(header);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.ceil(parsed);
+}
+
+function retryAfterHeader(headers: Record<string, string> | undefined): string | undefined {
+  if (headers === undefined) {
+    return undefined;
+  }
+
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === "retry-after") {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 function coverLetterErrorMessage(error: Error): string {
   if (APICallError.isInstance(error)) {
     const status = error.statusCode;
+
+    if (status === 429 || status === 503) {
+      const message = readBoundedError(error.responseBody) ?? readBoundedError(error.message);
+
+      if (message !== null) {
+        return message;
+      }
+    }
 
     if (status === 429 || status === 503 || status === 504) {
       const message = parseKnownAiMessage(error.message);
@@ -103,19 +165,39 @@ export function CoverLetter({
   const [streamingLabel, setStreamingLabel] = useState<GenerateLabel>("Generate cover letter");
   const copiedTimer = useRef<number | null>(null);
   const requestLock = useRef(false);
+  const retryAfterRef = useRef<number | undefined>(undefined);
 
   const handleCompletionError = useCallback(
     (completionError: Error) => {
-      if (isRateLimitedError(completionError)) {
-        onRateLimited();
+      if (!isRateLimitedError(completionError)) {
+        return;
       }
+
+      const fromError = APICallError.isInstance(completionError)
+        ? readRetryAfter(retryAfterHeader(completionError.responseHeaders))
+        : undefined;
+
+      onRateLimited(fromError ?? retryAfterRef.current);
     },
     [onRateLimited],
   );
 
+  // useCompletion does not copy response headers onto APICallError.
+  const completionFetch = useCallback<typeof fetch>(async (input, init) => {
+    const response = await fetch(input, init);
+    const retryAfter =
+      response.status === 429
+        ? readRetryAfter(response.headers.get("Retry-After") ?? undefined)
+        : undefined;
+
+    retryAfterRef.current = retryAfter;
+    return response;
+  }, []);
+
   const { completion, complete, stop, isLoading, error } = useCompletion<CoverLetterRequest>({
     api: "/api/cover-letter",
     id,
+    fetch: completionFetch,
     onError: handleCompletionError,
   });
 

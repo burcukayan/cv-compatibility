@@ -36,6 +36,20 @@ function retryAfterSeconds(response: Response): number {
   return Math.ceil(parsed);
 }
 
+function readAnalysesRemaining(response: Response): number | null {
+  const header = response.headers.get("X-RateLimit-Remaining");
+
+  if (header === null || !/^\d+$/.test(header)) {
+    return null;
+  }
+
+  return Number(header);
+}
+
+function analysesLeftLabel(count: number): string {
+  return count === 1 ? "1 analysis left this hour" : `${count} analyses left this hour`;
+}
+
 function useRetryCooldown() {
   const [until, setUntil] = useState<number | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(0);
@@ -120,14 +134,18 @@ export function Analyzer() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
+  const [analysesLeft, setAnalysesLeft] = useState<number | null>(null);
   const [analyzedInput, setAnalyzedInput] = useState<AnalyzeRequest | null>(null);
   const [coverSession, setCoverSession] = useState(0);
   const extractInFlight = useRef(false);
   const analyzeInFlight = useRef(false);
   const { secondsLeft: retrySeconds, start: startRetryCooldown } = useRetryCooldown();
-  const onRateLimited = useCallback(() => {
-    startRetryCooldown(RETRY_FALLBACK_SECONDS);
-  }, [startRetryCooldown]);
+  const onRateLimited = useCallback(
+    (seconds = RETRY_FALLBACK_SECONDS) => {
+      startRetryCooldown(seconds);
+    },
+    [startRetryCooldown],
+  );
 
   const canAnalyze =
     analyzeRequestSchema.safeParse({ resumeText, jobDescription }).success &&
@@ -225,6 +243,12 @@ export function Analyzer() {
         return;
       }
 
+      const remaining = readAnalysesRemaining(response);
+
+      if (remaining !== null) {
+        setAnalysesLeft(remaining);
+      }
+
       const body: unknown = await response.json();
       const result = z.object({ data: matchAnalysisSchema }).safeParse(body);
 
@@ -319,18 +343,25 @@ export function Analyzer() {
           </section>
         </div>
 
-        <button
-          type="submit"
-          disabled={!canAnalyze || retrySeconds > 0}
-          aria-busy={isAnalyzing}
-          className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-foreground px-5 text-sm font-medium text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
-        >
-          {retrySeconds > 0
-            ? `Try again in ${retrySeconds}s`
-            : isAnalyzing
-              ? "Analyzing…"
-              : "Analyze match"}
-        </button>
+        <div>
+          <button
+            type="submit"
+            disabled={!canAnalyze || retrySeconds > 0}
+            aria-busy={isAnalyzing}
+            className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-foreground px-5 text-sm font-medium text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            {retrySeconds > 0
+              ? `Try again in ${retrySeconds}s`
+              : isAnalyzing
+                ? "Analyzing…"
+                : "Analyze match"}
+          </button>
+          {analysesLeft !== null ? (
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              {analysesLeftLabel(analysesLeft)}
+            </p>
+          ) : null}
+        </div>
       </form>
 
       {sessionExpired || error ? (
