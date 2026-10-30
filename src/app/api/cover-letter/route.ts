@@ -2,6 +2,7 @@ import { createUIMessageStreamResponse, toUIMessageStream } from "ai";
 
 import { streamCoverLetter } from "@/lib/ai/cover-letter";
 import { mapAiError } from "@/lib/ai/errors";
+import { requireUser } from "@/lib/auth/require-user";
 import { coverLetterRequestSchema } from "@/lib/schemas";
 
 export const maxDuration = 30;
@@ -11,6 +12,12 @@ function errorName(error: unknown): string {
 }
 
 export async function POST(request: Request) {
+  const authResult = await requireUser();
+
+  if (authResult instanceof Response) {
+    return authResult;
+  }
+
   let body: unknown;
 
   try {

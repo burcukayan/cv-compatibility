@@ -1,3 +1,4 @@
+import { requireUser } from "@/lib/auth/require-user";
 import { PdfTooManyPagesError, extractPdfText } from "@/lib/pdf/extract-text";
 import { extractedPdfSchema } from "@/lib/schemas";
 
@@ -44,6 +45,12 @@ function hasPdfMagic(bytes: Uint8Array): boolean {
 }
 
 export async function POST(request: Request) {
+  const authResult = await requireUser();
+
+  if (authResult instanceof Response) {
+    return authResult;
+  }
+
   let formData: FormData;
 
   try {

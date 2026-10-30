@@ -4,6 +4,7 @@ import { useCompletion } from "@ai-sdk/react";
 import { APICallError } from "ai";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { SessionExpiredNotice } from "@/components/session-expired";
 import { AI_BUSY_MESSAGE, isKnownAiServiceMessage } from "@/lib/ai/error-messages";
 import type { CoverLetterRequest } from "@/lib/schemas";
 
@@ -281,7 +282,11 @@ export function CoverLetter({
           role="alert"
           className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
         >
-          {coverLetterErrorMessage(error)}
+          {APICallError.isInstance(error) && error.statusCode === 401 ? (
+            <SessionExpiredNotice />
+          ) : (
+            coverLetterErrorMessage(error)
+          )}
         </p>
       ) : null}
 

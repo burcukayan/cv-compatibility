@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { CoverLetter } from "@/components/cover-letter";
 import { MatchResults } from "@/components/match-results";
+import { SessionExpiredNotice } from "@/components/session-expired";
 import {
   TEXT_MAX_LENGTH,
   TEXT_MIN_LENGTH,
@@ -115,6 +116,7 @@ export function Analyzer() {
   const [jobDescription, setJobDescription] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
@@ -145,6 +147,7 @@ export function Analyzer() {
     setIsExtracting(true);
     setFileName(file.name);
     setError(null);
+    setSessionExpired(false);
 
     try {
       const formData = new FormData();
@@ -154,6 +157,11 @@ export function Analyzer() {
         method: "POST",
         body: formData,
       });
+
+      if (response.status === 401) {
+        setSessionExpired(true);
+        return;
+      }
 
       if (!response.ok) {
         setError(await readApiError(response));
@@ -194,6 +202,7 @@ export function Analyzer() {
     analyzeInFlight.current = true;
     setIsAnalyzing(true);
     setError(null);
+    setSessionExpired(false);
 
     try {
       const response = await fetch("/api/analyze", {
@@ -201,6 +210,11 @@ export function Analyzer() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parsed.data),
       });
+
+      if (response.status === 401) {
+        setSessionExpired(true);
+        return;
+      }
 
       if (!response.ok) {
         if (response.status === 429) {
@@ -319,15 +333,24 @@ export function Analyzer() {
         </button>
       </form>
 
-      {error ? (
+      {sessionExpired || error ? (
         <div
           role="alert"
           className="mt-6 flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
         >
-          <p>{error}</p>
+          {sessionExpired ? (
+            <p>
+              <SessionExpiredNotice />
+            </p>
+          ) : (
+            <p>{error}</p>
+          )}
           <button
             type="button"
-            onClick={() => setError(null)}
+            onClick={() => {
+              setError(null);
+              setSessionExpired(false);
+            }}
             className="shrink-0 rounded-md px-2 py-1 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
           >
             Dismiss
