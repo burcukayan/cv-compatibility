@@ -1,3 +1,4 @@
+import { createAnalysis } from "@/db/queries";
 import { analyzeMatch } from "@/lib/ai/analyze-match";
 import { mapAiError } from "@/lib/ai/errors";
 import { requireUser } from "@/lib/auth/require-user";
@@ -63,8 +64,22 @@ export async function POST(request: Request) {
 
   try {
     const data = await analyzeMatch(parsed.data);
+    let analysisId: string | undefined;
+
+    try {
+      analysisId = await createAnalysis(authResult.sub, {
+        jobTitle: data.jobTitle,
+        companyName: data.companyName,
+        jobDescription: parsed.data.jobDescription,
+        matchScore: data.matchScore,
+        result: data,
+      });
+    } catch (error) {
+      console.error(errorName(error));
+    }
+
     return Response.json(
-      { data },
+      analysisId === undefined ? { data } : { data, analysisId },
       { status: 200, headers: rateLimitRemainingHeader(userLimit.remaining) },
     );
   } catch (error) {

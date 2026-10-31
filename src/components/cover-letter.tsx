@@ -33,6 +33,7 @@ const toneOptionClassName =
 
 type CoverLetterProps = {
   id: string;
+  analysisId?: string;
   resumeText: string;
   jobDescription: string;
   retrySeconds: number;
@@ -154,6 +155,7 @@ function isRateLimitedError(error: Error): boolean {
 
 export function CoverLetter({
   id,
+  analysisId,
   resumeText,
   jobDescription,
   retrySeconds,
@@ -231,7 +233,12 @@ export function CoverLetter({
 
     try {
       await complete(PROMPT, {
-        body: { resumeText, jobDescription, tone },
+        body: {
+          resumeText,
+          jobDescription,
+          tone,
+          ...(analysisId === undefined ? {} : { analysisId }),
+        },
       });
     } finally {
       requestLock.current = false;

@@ -18,6 +18,7 @@ const envSchema = z.object({
     .regex(AUTH0_SECRET_PATTERN, "AUTH0_SECRET must be exactly 64 hex characters"),
   UPSTASH_REDIS_REST_URL: z.url("UPSTASH_REDIS_REST_URL must be a valid URL"),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1, "UPSTASH_REDIS_REST_TOKEN missing"),
+  DATABASE_URL: z.url("DATABASE_URL must be a valid URL"),
 });
 
 export const env = envSchema.parse(process.env);

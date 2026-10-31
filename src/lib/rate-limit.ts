@@ -13,12 +13,15 @@ const EXTRACT_PDF_LIMIT = 20;
 const EXTRACT_PDF_WINDOW = "1 h" as const;
 const AI_GLOBAL_DAILY_LIMIT = 200;
 const AI_GLOBAL_DAILY_WINDOW = "1 d" as const;
+const EXPORT_LIMIT = 5;
+const EXPORT_WINDOW = "1 h" as const;
 const RATE_LIMIT_TIMEOUT_MS = 5_000;
 
 const ANALYZE_PREFIX = "ratelimit:analyze";
 const COVER_LETTER_PREFIX = "ratelimit:cover-letter";
 const EXTRACT_PDF_PREFIX = "ratelimit:extract-pdf";
 const AI_GLOBAL_DAILY_PREFIX = "ratelimit:ai-global";
+const EXPORT_PREFIX = "ratelimit:export";
 
 export const GLOBAL_RATE_LIMIT_IDENTIFIER = "global";
 
@@ -30,7 +33,7 @@ const redis = new Redis({
   token: env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-type RateLimitName = "analyze" | "coverLetter" | "extractPdf" | "aiGlobalDaily";
+type RateLimitName = "analyze" | "coverLetter" | "extractPdf" | "aiGlobalDaily" | "export";
 type Window = "1 h" | "1 d";
 type Outcome = "allowed" | "limited" | "unavailable";
 
@@ -57,6 +60,7 @@ const limiters: Record<RateLimitName, Ratelimit> = {
     AI_GLOBAL_DAILY_WINDOW,
     AI_GLOBAL_DAILY_PREFIX,
   ),
+  export: createLimiter(EXPORT_LIMIT, EXPORT_WINDOW, EXPORT_PREFIX),
 };
 
 function logOutcome(name: RateLimitName, outcome: Outcome): void {

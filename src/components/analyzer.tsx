@@ -16,6 +16,11 @@ import {
   type MatchAnalysis,
 } from "@/lib/schemas";
 
+const analyzeResponseSchema = z.object({
+  data: matchAnalysisSchema,
+  analysisId: z.string().uuid().optional(),
+});
+
 const GENERIC_ERROR = "Something went wrong.";
 const MAX_ERROR_LENGTH = 500;
 const RETRY_FALLBACK_SECONDS = 60;
@@ -134,6 +139,7 @@ export function Analyzer() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<MatchAnalysis | null>(null);
+  const [analysisId, setAnalysisId] = useState<string | undefined>(undefined);
   const [analysesLeft, setAnalysesLeft] = useState<number | null>(null);
   const [analyzedInput, setAnalyzedInput] = useState<AnalyzeRequest | null>(null);
   const [coverSession, setCoverSession] = useState(0);
@@ -250,7 +256,7 @@ export function Analyzer() {
       }
 
       const body: unknown = await response.json();
-      const result = z.object({ data: matchAnalysisSchema }).safeParse(body);
+      const result = analyzeResponseSchema.safeParse(body);
 
       if (!result.success) {
         setError(GENERIC_ERROR);
@@ -269,6 +275,7 @@ export function Analyzer() {
 
       setAnalyzedInput(nextInput);
       setAnalysis(result.data.data);
+      setAnalysisId(result.data.analysisId);
     } catch {
       setError(GENERIC_ERROR);
     } finally {
@@ -395,6 +402,7 @@ export function Analyzer() {
           <CoverLetter
             key={coverSession}
             id={String(coverSession)}
+            analysisId={analysisId}
             resumeText={analyzedInput.resumeText}
             jobDescription={analyzedInput.jobDescription}
             retrySeconds={retrySeconds}

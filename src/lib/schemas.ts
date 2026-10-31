@@ -32,6 +32,20 @@ const suggestionSchema = z.object({
 });
 
 export const matchAnalysisSchema = z.object({
+  jobTitle: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe("Job title taken from the job description."),
+  companyName: z
+    .string()
+    .trim()
+    .max(200)
+    .nullable()
+    .describe(
+      "Company name taken from the job description, or null if it is not mentioned.",
+    ),
   matchScore: z
     .number()
     .int()
@@ -64,7 +78,14 @@ export const extractedPdfSchema = z
 
 export const coverLetterRequestSchema = analyzeRequestSchema.extend({
   tone: z.enum(["professional", "enthusiastic", "concise"]),
+  analysisId: z.string().uuid().optional(),
 });
+
+export const analysisIdSchema = z.string().uuid();
+
+export const historyPageSchema = z.coerce.number().int().min(1).max(1000);
+
+export const deleteAllConfirmationSchema = z.literal("DELETE");
 
 export type AnalyzeRequest = z.infer<typeof analyzeRequestSchema>;
 export type CoverLetterRequest = z.infer<typeof coverLetterRequestSchema>;
