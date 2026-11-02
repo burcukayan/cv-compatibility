@@ -5,7 +5,11 @@ import { APICallError } from "ai";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SessionExpiredNotice } from "@/components/session-expired";
-import { AI_BUSY_MESSAGE, isKnownAiServiceMessage } from "@/lib/ai/error-messages";
+import {
+  AI_BUSY_MESSAGE,
+  COVER_LETTER_CUTOFF_MESSAGE,
+  isKnownAiServiceMessage,
+} from "@/lib/ai/error-messages";
 import type { CoverLetterRequest } from "@/lib/schemas";
 
 type Tone = CoverLetterRequest["tone"];
@@ -114,6 +118,10 @@ function retryAfterHeader(headers: Record<string, string> | undefined): string |
 }
 
 function coverLetterErrorMessage(error: Error): string {
+  if (error.message === COVER_LETTER_CUTOFF_MESSAGE) {
+    return COVER_LETTER_CUTOFF_MESSAGE;
+  }
+
   if (APICallError.isInstance(error)) {
     const status = error.statusCode;
 

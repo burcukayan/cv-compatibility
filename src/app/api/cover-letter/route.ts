@@ -1,7 +1,13 @@
-import { createUIMessageStreamResponse, toUIMessageStream, type UIMessage } from "ai";
+import {
+  createUIMessageStreamResponse,
+  toUIMessageStream,
+  type UIMessage,
+  type UIMessageChunk,
+} from "ai";
 
-import { saveCoverLetter } from "@/db/queries";
-import { streamCoverLetter } from "@/lib/ai/cover-letter";
+import { getAnalysis, saveCoverLetter } from "@/db/queries";
+import { streamCoverLetter, type CoverLetterAnalysisContext } from "@/lib/ai/cover-letter";
+import { COVER_LETTER_CUTOFF_MESSAGE } from "@/lib/ai/error-messages";
 import { mapAiError } from "@/lib/ai/errors";
 import { requireUser } from "@/lib/auth/require-user";
 import { verifyOrigin } from "@/lib/security/verify-origin";
@@ -20,6 +26,44 @@ function errorName(error: unknown): string {
 
 function coverLetterText(message: UIMessage): string {
   return message.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
+}
+
+function appendCutoffError(stream: ReadableStream<UIMessageChunk>): ReadableStream<UIMessageChunk> {
+  return stream.pipeThrough(
+    new TransformStream<UIMessageChunk, UIMessageChunk>({
+      transform(chunk, controller) {
+        controller.enqueue(chunk);
+
+        if (chunk.type === "finish" && chunk.finishReason === "length") {
+          controller.enqueue({
+            type: "error",
+            errorText: COVER_LETTER_CUTOFF_MESSAGE,
+          });
+        }
+      },
+    }),
+  );
+}
+
+async function loadAnalysisContext(
+  userId: string,
+  analysisId: string | undefined,
+): Promise<CoverLetterAnalysisContext | undefined> {
+  if (analysisId === undefined) {
+    return undefined;
+  }
+
+  const row = await getAnalysis(userId, analysisId);
+
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    jobTitle: row.jobTitle,
+    companyName: row.companyName,
+    matchedSkills: row.result.matchedSkills,
+  };
 }
 
 export async function POST(request: Request) {
@@ -69,38 +113,42 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = streamCoverLetter(parsed.data);
+    const analysis = await loadAnalysisContext(authResult.sub, parsed.data.analysisId);
+    const result = streamCoverLetter(parsed.data, analysis);
 
     return createUIMessageStreamResponse({
       headers: rateLimitRemainingHeader(userLimit.remaining),
-      stream: toUIMessageStream({
-        stream: result.stream,
-        onError: (error) => mapAiError(error).message,
-        onFinish: async (event) => {
-          const analysisId = parsed.data.analysisId;
+      stream: appendCutoffError(
+        toUIMessageStream({
+          stream: result.stream,
+          onError: (error) => mapAiError(error).message,
+          onFinish: async (event) => {
+            const analysisId = parsed.data.analysisId;
 
-          if (
-            analysisId === undefined ||
-            event.isAborted ||
-            event.isCancelled ||
-            event.outcome.status !== "completed"
-          ) {
-            return;
-          }
+            if (
+              analysisId === undefined ||
+              event.isAborted ||
+              event.isCancelled ||
+              event.outcome.status !== "completed" ||
+              event.finishReason === "length"
+            ) {
+              return;
+            }
 
-          const text = coverLetterText(event.responseMessage);
+            const text = coverLetterText(event.responseMessage);
 
-          if (text.length === 0) {
-            return;
-          }
+            if (text.length === 0) {
+              return;
+            }
 
-          try {
-            await saveCoverLetter(authResult.sub, analysisId, text, parsed.data.tone);
-          } catch (error) {
-            console.error(errorName(error));
-          }
-        },
-      }),
+            try {
+              await saveCoverLetter(authResult.sub, analysisId, text, parsed.data.tone);
+            } catch (error) {
+              console.error(errorName(error));
+            }
+          },
+        }),
+      ),
     });
   } catch (error) {
     const mapped = mapAiError(error);

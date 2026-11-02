@@ -6,6 +6,8 @@ export const AI_UNAVAILABLE_MESSAGE =
 
 export const AI_TIMEOUT_MESSAGE = "The request timed out.";
 
+export const COVER_LETTER_CUTOFF_MESSAGE = "The letter was cut off. Please try again.";
+
 const KNOWN_AI_SERVICE_MESSAGES = new Set<string>([
   AI_BUSY_MESSAGE,
   AI_UNAVAILABLE_MESSAGE,

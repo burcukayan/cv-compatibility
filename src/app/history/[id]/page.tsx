@@ -2,6 +2,7 @@ import { io } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 
 import { AccountHeader } from "@/components/account-header";
+import { AppNav } from "@/components/app-nav";
 import { CopyTextButton } from "@/components/copy-text-button";
 import { DeleteAnalysisButton } from "@/components/delete-analysis-button";
 import { MatchResults } from "@/components/match-results";
@@ -38,36 +39,39 @@ export default async function HistoryDetailPage({ params }: PageProps<"/history/
   const now = new Date();
 
   return (
-    <div className={pageClassName}>
-      <AccountHeader user={authResult} />
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-            {analysis.jobTitle}
-          </h2>
-          {analysis.companyName ? (
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{analysis.companyName}</p>
-          ) : null}
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            <time dateTime={analysis.createdAt.toISOString()}>
-              {formatRelativeDate(analysis.createdAt, now)}
-            </time>
-          </p>
+    <>
+      <AppNav name={authResult.name} nickname={authResult.nickname} />
+      <div className={pageClassName}>
+        <AccountHeader />
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+              {analysis.jobTitle}
+            </h2>
+            {analysis.companyName ? (
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{analysis.companyName}</p>
+            ) : null}
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              <time dateTime={analysis.createdAt.toISOString()}>
+                {formatRelativeDate(analysis.createdAt, now)}
+              </time>
+            </p>
+          </div>
+          <DeleteAnalysisButton id={analysis.id} />
         </div>
-        <DeleteAnalysisButton id={analysis.id} />
+        <MatchResults analysis={analysis.result} />
+        {analysis.coverLetter ? (
+          <section className="mt-10 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-foreground">Cover letter</h2>
+              <CopyTextButton text={analysis.coverLetter} />
+            </div>
+            <div className="mt-4 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+              {analysis.coverLetter}
+            </div>
+          </section>
+        ) : null}
       </div>
-      <MatchResults analysis={analysis.result} />
-      {analysis.coverLetter ? (
-        <section className="mt-10 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Cover letter</h2>
-            <CopyTextButton text={analysis.coverLetter} />
-          </div>
-          <div className="mt-4 whitespace-pre-wrap text-sm leading-6 text-zinc-700 dark:text-zinc-300">
-            {analysis.coverLetter}
-          </div>
-        </section>
-      ) : null}
-    </div>
+    </>
   );
 }
