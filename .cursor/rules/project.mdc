@@ -1,0 +1,31 @@
+---
+description: General description of CV Compatibility Project.
+alwaysApply: true
+---
+
+# Proje
+CV Compatibility: The project is a Next.js app that provide alignment score, suggestions and lack skills with comparing User resume and job posting.
+
+# Technology
+- Next.js App Router, TypeScript (strict), Tailwind CSS
+- AI SDK v7 + @ai-sdk/google (Gemini)
+- Authentication with Zod
+
+# AI SDK Rules
+- Use `generateText` / `streamText` ile `Output.object({ schema })` for structured output. Do not use former `generateObject` API.
+- Receive model name always in `env.GEMINI_MODEL`, do not write constantly to code.
+- Do not rely on your memory for AI SDK APIs. Before writing any code, read the relevant page at https://ai-sdk.dev/docs. If you are unsure which page to consult, search within the https://ai-sdk.dev/llms.txt file.
+- For Next.js, follow the instructions provided in AGENTS.md (located at node_modules/next/dist/docs/).
+
+# Security (mandatory)
+- AI calls are performed exclusively on the server (via Route Handlers or Server Actions).
+- API keys are never exposed to the client; the `NEXT_PUBLIC_` prefix is ​​not used for sensitive values.
+- Environment variables are accessed solely through `src/lib/env.ts`.
+- All user input is validated on the server using Zod, with enforced length limits.
+- User-provided text is kept separate from system instructions (to prevent prompt injection).
+- Personal data, such as the contents of a CV, is never logged.
+- Do not show technical details to the user on error messages.
+
+# Code style
+- Code, variable, and function names are in English. UI text is in English.
+- Small, single-responsibility components. Server-side code is located under `src/lib` and `src/app/api`.

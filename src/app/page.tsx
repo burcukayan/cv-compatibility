@@ -1,69 +1,88 @@
-import Image from "next/image";
+import { Suspense } from "react";
+
+import { AccountHeader } from "@/components/account-header";
+import { Analyzer } from "@/components/analyzer";
+import { AppNav } from "@/components/app-nav";
+import { auth0 } from "@/lib/auth0";
+
+const pageClassName =
+  "mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-8 sm:px-6 lg:px-8";
+
+const primaryLinkClassName =
+  "inline-flex h-11 items-center justify-center rounded-lg bg-foreground px-5 text-sm font-medium text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground";
+
+const secondaryLinkClassName =
+  "inline-flex h-11 items-center justify-center rounded-lg border border-zinc-300 px-5 text-sm font-medium text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground dark:border-zinc-600";
+
+const FEATURES = [
+  "A match score for the job you want",
+  "The skills the posting asks for that your resume does not show",
+  "Edit suggestions and a cover letter draft",
+] as const;
+
+function Landing() {
+  return (
+    <div className={pageClassName}>
+      <section className="mx-auto flex w-full max-w-xl flex-col py-8 sm:py-16">
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+          See how your resume fits the role
+        </h1>
+        <p className="mt-3 text-base text-zinc-600 dark:text-zinc-400">
+          ResumeMatch compares your resume with a job description before you apply.
+        </p>
+        <ul className="mt-8 list-none space-y-3 text-sm text-zinc-700 dark:text-zinc-300">
+          {FEATURES.map((feature) => (
+            <li key={feature} className="flex gap-3">
+              <span
+                aria-hidden="true"
+                className="mt-1 size-1.5 shrink-0 rounded-full bg-foreground"
+              />
+              <span>{feature}</span>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <a href="/auth/login" className={primaryLinkClassName}>
+            Log in
+          </a>
+          <a href="/auth/login?screen_hint=signup" className={secondaryLinkClassName}>
+            Sign up
+          </a>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+async function HomeSession() {
+  const session = await auth0.getSession();
+  const user = session?.user;
+
+  if (!user) {
+    return <Landing />;
+  }
+
+  return (
+    <>
+      <AppNav name={user.name} nickname={user.nickname} />
+      <div className={pageClassName}>
+        <AccountHeader />
+        <Analyzer />
+      </div>
+    </>
+  );
+}
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <Suspense
+      fallback={
+        <div className={pageClassName}>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">Loading…</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+      }
+    >
+      <HomeSession />
+    </Suspense>
   );
 }
